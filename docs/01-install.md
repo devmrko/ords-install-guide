@@ -26,15 +26,22 @@ sudo useradd -m -g oinstall oracle
 ```bash
 sudo mkdir -p /opt/java
 
-# Eclipse Temurin 21 LTS 최신 GA (Adoptium API 가 latest 리디렉트)
+# Oracle JDK 21 LTS 최신 (OCI 워크로드는 OTN 라이선스로 무료)
 wget -nv -O /tmp/jdk.tar.gz \
-  "https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jdk/hotspot/normal/eclipse"
+  "https://download.oracle.com/java/21/latest/jdk-21_linux-x64_bin.tar.gz"
 sudo tar -xzf /tmp/jdk.tar.gz -C /opt/java
 
-# alias 갈아끼우기
+# alias 갈아끼우기 (tar 풀린 jdk-21.0.x 자동 감지)
 NEW_JDK=$(ls -1dt /opt/java/jdk-* | head -1)
 sudo ln -sfn "$NEW_JDK" /opt/java/current
 ```
+
+> **라이선스**: Oracle JDK 는 OTN(NFTC) 라이선스로 **OCI 위에서 운영 사용 무료**.
+> 다른 클라우드/온프렘에서 운영 사용하려면 라이선스 확인 필요 — 그 경우 Temurin 같은
+> OpenJDK 빌드로 갈아끼우는 게 안전:
+> ```bash
+> # JDK_URL=https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jdk/hotspot/normal/eclipse
+> ```
 
 이후 모든 곳에서 **`JAVA_HOME=/opt/java/current`** 만 참조. 업그레이드 시:
 ```bash

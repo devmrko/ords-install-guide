@@ -37,7 +37,7 @@ LB:
 | OS | Oracle Linux 8/9, RHEL 8/9, Ubuntu 22.04+ |
 | 백엔드 DB | Autonomous Database (ADB) — wallet 사용 |
 | 설치 방식 | wget + unzip (RPM 미사용) |
-| Java | Eclipse Temurin JDK 21 LTS (`/opt/java/current` symlink) |
+| Java | Oracle JDK 21 LTS (`/opt/java/current` symlink) — OCI 워크로드 OTN 무료 |
 | 실행 모드 | standalone (내장 Jetty) + systemd |
 | LB | OCI Load Balancer (Flexible shape) |
 | TLS | LB 종단 — OCI Certificate Service에 사설 cert import |
