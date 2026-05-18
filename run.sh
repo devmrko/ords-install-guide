@@ -6,6 +6,8 @@
 #   ./run.sh prereq | install | configure | start | smoke
 #   ./run.sh ha | ha-tf {plan|apply|destroy|output}
 #   ./run.sh fetch-cert     # OCI Cert Service → OS 로 cert PEM 내려받아 등록
+#   ./run.sh vector-demo {all|admin|onnx|schema|publish|test|cleanup}
+#                           # ADB 위에 ONNX 임베딩 + ORDS vector 검색 모듈 발행
 #   ./run.sh all       (= prereq install configure start smoke)
 #   ./run.sh teardown
 # ============================================================
@@ -45,6 +47,16 @@ case "$cmd" in
       export ORDS_GATEWAY_USER_PASSWORD
     }
     ;;
+  vector-demo)
+    [[ -z "${ADMIN_PASSWORD:-}" ]] && {
+      read -rsp "ADB ADMIN_PASSWORD: " ADMIN_PASSWORD; echo
+      export ADMIN_PASSWORD
+    }
+    [[ -z "${VECTOR_DEMO_PASSWORD:-}" ]] && {
+      read -rsp "VECTOR_DEMO_PASSWORD (데모 스키마용): " VECTOR_DEMO_PASSWORD; echo
+      export VECTOR_DEMO_PASSWORD
+    }
+    ;;
 esac
 
 case "$cmd" in
@@ -56,6 +68,7 @@ case "$cmd" in
   ha)        bash scripts/05_ha.sh ;;
   ha-tf)     bash scripts/06_lb_terraform.sh "$@" ;;
   fetch-cert) bash scripts/07_fetch_oci_cert.sh ;;
+  vector-demo) bash scripts/08_vector_demo.sh "$@" ;;
   teardown)  bash scripts/99_teardown.sh ;;
   all)
     bash scripts/00_prereq.sh

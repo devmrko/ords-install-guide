@@ -213,7 +213,8 @@ ords-install-guide/
 │   ├── 03-run.md                   # systemd unit 동작 + 로그 위치 + smoke test 해석
 │   ├── 04-ha.md                    # 2노드 + OCI LB + 사설 TLS — 웹콘솔/Terraform 양트랙 + DNS/hosts 설명
 │   ├── 05-cert-from-oci.md         # OCI Cert Service의 cert를 OS truststore/JVM truststore에 등록
-│   └── 06-operations.md            # 배포 후: 백업/복구, 모니터링, logrotate, cert 자동갱신 cron
+│   ├── 06-operations.md            # 배포 후: 백업/복구, 모니터링, logrotate, cert 자동갱신 cron
+│   └── 07-vector-rest.md           # ADB 23ai VECTOR + ONNX 임베딩 + ORDS 검색 모듈 데모
 │
 ├── scripts/                        # 모두 idempotent. 재실행 시 기존 상태 감지하면 skip
 │   ├── 00_prereq.sh                # 패키지 확인(wget/unzip/...) + oracle 유저 생성 + JDK21 + firewalld/ufw 8080 개방
@@ -224,11 +225,20 @@ ords-install-guide/
 │   ├── 05_ha.sh                    # secondary 노드 부트스트랩 안내 + 양 노드 health 확인 (LB는 별도 ha-tf 또는 콘솔)
 │   ├── 06_lb_terraform.sh          # terraform 래퍼. PEM은 환경변수 대신 .secrets.auto.tfvars(600) 로 주입 (ps/proc 노출 방지)
 │   ├── 07_fetch_oci_cert.sh        # OCI CLI로 cert-bundle get → /etc/ords/tls/*.pem 으로 저장 (rotation 시 재실행)
+│   ├── 08_vector_demo.sh           # ADB 위에 VECTOR_DEMO 스키마 + ONNX 모델 + ORDS vector.search 모듈 발행
 │   ├── 99_teardown.sh              # 역순 정리. systemd disable → 디렉토리 삭제. 확인 프롬프트 있음
 │   └── lib/common.sh               # 공용 함수: log/ok/warn/die, as_root, require_env, need_cmd, fetch(wget+retry), init_logging
 │
 ├── sql/
-│   └── smoke_test.sql              # 04_smoke.sh가 sqlcl로 던질 SQL — SELECT 1 from dual, ORDS 메타 확인 등
+│   ├── smoke_test.sql              # 04_smoke.sh가 sqlcl로 던질 SQL — SELECT 1 from dual, ORDS 메타 확인 등
+│   └── vector/                     # 07-vector-rest.md 데모용 SQL 묶음
+│       ├── 01_admin_setup.sql      # ADMIN: VECTOR_DEMO 사용자 생성 + ORDS schema enable (base=/ords/vector/)
+│       ├── 02_load_onnx.sql        # ADMIN: DBMS_CLOUD.GET_OBJECT → DBMS_VECTOR.LOAD_ONNX_MODEL 로 임베딩 모델 등록
+│       ├── 03_schema.sql           # VECTOR_DEMO: DOC_CHUNKS(VECTOR(384,FLOAT32)) + IVF 인덱스
+│       ├── 04_seed.sql             # 12건 샘플 INSERT + VECTOR_EMBEDDING() 자동 채움
+│       ├── 05_ords_publish.sql     # module vector.search + POST/GET handler 정의
+│       ├── 06_test.sql             # SQL 레벨에서 top-k 유사 검색 결과 확인
+│       └── 99_cleanup.sql          # 사용자/모델 cascade drop
 │
 ├── config/
 │   └── ords.service.tmpl           # systemd unit 템플릿. ${ORDS_HOME}, ${ORDS_CONFIG}, ${JAVA_HOME}, ${ORDS_USER}, ${ORDS_PORT} 치환
@@ -256,6 +266,8 @@ ords-install-guide/
 ./run.sh ha          # HA secondary 노드 부트스트랩 안내 + 검증
 ./run.sh ha-tf       {plan|apply|destroy|output}   # OCI LB + cert (Terraform)
 ./run.sh fetch-cert  # OCI Cert Service 의 cert 를 OS 로 내려받아 truststore 등록
+./run.sh vector-demo {all|admin|onnx|schema|publish|test|cleanup}
+                     # ADB 23ai + ORDS 위에 ONNX 임베딩 + vector 검색 REST 모듈 발행
 ./run.sh all         # prereq~smoke 순차
 ./run.sh teardown    # 역순 정리
 ```
