@@ -1,0 +1,38 @@
+# ============================================================
+# backend.tf.example  →  cp backend.tf.example backend.tf 후 값 채워서 사용
+#
+# 이유: terraform state 파일에는 PEM/private-key 같은 sensitive 값이
+#       평문으로 저장됨. local backend(기본)는 그 파일이 디스크에 그대로
+#       남기 때문에, 운영에서는 반드시 암호화된 원격 backend 로 옮길 것.
+#
+# OCI Object Storage 를 S3 호환 backend 로 사용 (KMS 암호화 + 접근통제)
+# ============================================================
+terraform {
+  backend "s3" {
+    bucket = "ords-tfstate"                                            # 미리 생성한 OCI 버킷
+    key    = "ords-install-guide/lb-cert.tfstate"
+    region = "ap-seoul-1"                                              # 또는 본인 region
+    endpoint = "https://<tenancy_namespace>.compat.objectstorage.ap-seoul-1.oraclecloud.com"
+
+    # OCI 호환 모드 설정
+    force_path_style            = true
+    skip_region_validation      = true
+    skip_credentials_validation = true
+    skip_metadata_api_check     = true
+
+    # 인증: OCI Customer Secret Key 를 access_key/secret_key 로 사용
+    # ~/.aws/credentials 에 [default] 프로필로 저장하거나 환경변수:
+    #   export AWS_ACCESS_KEY_ID=<oci_customer_secret_key_access>
+    #   export AWS_SECRET_ACCESS_KEY=<oci_customer_secret_key_secret>
+
+    # 버킷 자체에 KMS 키로 default encryption 설정 권장:
+    #   oci os bucket update --name ords-tfstate \
+    #     --kms-key-id ocid1.key.oc1...
+  }
+}
+
+# 추가 보호:
+# 1) 버킷에 IAM 정책으로 read/write 권한을 운영 관리자만 갖도록 제한
+# 2) versioning 활성화 (state 파괴 시 복구)
+# 3) 인증서/키 같은 sensitive state 는 별도 .tfstate 로 분리하는 것이 안전
+#    (이 cookbook 은 단순화 위해 단일 state 사용)

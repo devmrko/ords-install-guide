@@ -32,13 +32,29 @@ terraform apply
 
 ## 사설 인증서 처리 (`import_cert`)
 
-- `true` → PEM 들을 `oci_certificates_management_certificate` 로 새로 import
-  (셸에서 `TF_VAR_cert_pem` / `TF_VAR_key_pem` / `TF_VAR_chain_pem` 으로 주입)
+- `true` → PEM 들을 `oci_certificates_management_certificate` 로 새로 import.
+  `06_lb_terraform.sh` 가 `.env` 의 PEM 파일들을 **임시 `.secrets.auto.tfvars`(권한 600)** 로 만들어
+  Terraform 에 전달하고 종료 시 `shred -u` 로 삭제. (환경변수 노출 회피)
 - `false` → 이미 OCI Cert Service 에 등록된 `cert_ocid` 사용
 
-새로 import 하는 경우 인증서/키는 절대 tfvars 평문에 두지 말고 `.env` → 환경변수 경로로만.
+## State 보안 (⚠️ 중요)
+
+Terraform state 파일에는 cert_pem / key_pem 이 **평문 저장**됨. local backend(기본)는 디스크에 그대로 남으므로 운영에서는 반드시:
+
+1. `backend.tf.example` 복사 → OCI Object Storage(KMS 암호화) 같은 원격 backend 사용
+2. 버킷에 IAM 으로 운영 관리자만 read/write 허용
+3. 버킷 versioning 활성화
+4. 가능하면 인증서 스택을 별도 state 로 분리
+
+```bash
+cp backend.tf.example backend.tf
+vi backend.tf       # bucket, region 등 채움
+terraform init -migrate-state
+```
 
 ## destroy 주의
 
-`terraform destroy` 는 LB / backend set / listener / **import 한 인증서까지** 같이 지웁니다.
-인증서가 다른 서비스에서 참조 중이면 분리 관리 필요 (state 에서 `terraform state rm` 후 콘솔에서 별도 관리).
+`terraform destroy` 는 LB / backend set / listener 만 지웁니다.
+인증서 리소스에는 `lifecycle { prevent_destroy = true }` 가 걸려있어 destroy 실패. 정말 지우려면:
+- `main.tf` 의 해당 `lifecycle` 블록 제거 → `apply` → `destroy`
+- 또는 `terraform state rm oci_certificates_management_certificate.private[0]` 후 콘솔에서 별도 관리

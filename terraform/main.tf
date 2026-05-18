@@ -13,6 +13,13 @@ terraform {
       version = ">= 5.0"
     }
   }
+
+  # ============================================================
+  # 보안 경고
+  # state 파일에는 cert_pem / key_pem 이 평문 저장됨.
+  # 로컬 backend(기본) 사용 시 디스크에 그대로 남음.
+  # → 운영에서는 반드시 backend.tf.example 참고하여 원격 암호화 backend 로.
+  # ============================================================
 }
 
 # Provider 는 환경의 ~/.oci/config 자동 인식 (oci setup config 먼저)
@@ -38,6 +45,12 @@ resource "oci_certificates_management_certificate" "private" {
     cert_chain_pem     = var.chain_pem != "" ? var.chain_pem : null
     certificate_pem    = var.cert_pem
     private_key_pem    = var.key_pem
+  }
+
+  # 다른 서비스가 이 cert 를 참조 중이면 destroy 로 의도치 않게 사라지지 않게 보호.
+  # 정말 지우려면 이 lifecycle 블록 제거 후 destroy 또는 `terraform state rm`.
+  lifecycle {
+    prevent_destroy = true
   }
 }
 

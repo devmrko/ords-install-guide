@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # ============================================================
 # 06_lb_terraform.sh
-# - .env 값을 TF_VAR_* 로 export
-# - 사설 인증서 PEM 들을 그대로 main.tf 가 oci_certificates_management_certificate
-#   리소스로 import 함
-# - usage: ./run.sh ha-tf {plan|apply|destroy|output}
+# - PEM 본문을 환경변수로 export 하지 않고 임시 tfvars 파일(600)로 전달
+#   (ps e / /proc/*/environ 노출 방지)
+# - 일반 인자 값들만 TF_VAR_* 사용
+# - usage: ./run.sh ha-tf {plan|apply|destroy|output} [추가 인자]
 # ============================================================
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -13,29 +13,12 @@ source "$REPO_ROOT/scripts/lib/common.sh"
 
 need_cmd terraform
 
-require_env OCI_COMPARTMENT_OCID OCI_VCN_OCID OCI_LB_SUBNET_OCID \
+require_env OCI_COMPARTMENT_OCID OCI_LB_SUBNET_OCID \
             HA_NODES ORDS_PORT LB_HEALTHCHECK_PATH \
             LB_SHAPE LB_BANDWIDTH_MIN LB_BANDWIDTH_MAX LB_IS_PRIVATE
 
-# 인증서: OCI_CERT_OCID 가 있으면 그거 사용, 없으면 PEM 들로 새로 import
-if [[ -n "${OCI_CERT_OCID:-}" ]]; then
-  log "기존 OCI Cert OCID 사용: $OCI_CERT_OCID"
-  export TF_VAR_cert_ocid="$OCI_CERT_OCID"
-  export TF_VAR_import_cert=false
-else
-  require_env TLS_CERT_PEM TLS_KEY_PEM OCI_CERT_NAME
-  [[ -f "$TLS_CERT_PEM" ]] || die "TLS_CERT_PEM 없음: $TLS_CERT_PEM"
-  [[ -f "$TLS_KEY_PEM"  ]] || die "TLS_KEY_PEM  없음: $TLS_KEY_PEM"
-  log "사설 인증서 import: $OCI_CERT_NAME"
-  export TF_VAR_import_cert=true
-  export TF_VAR_cert_name="$OCI_CERT_NAME"
-  export TF_VAR_cert_pem="$(cat "$TLS_CERT_PEM")"
-  export TF_VAR_key_pem="$(cat "$TLS_KEY_PEM")"
-  export TF_VAR_chain_pem="$(cat "${TLS_CHAIN_PEM:-/dev/null}" 2>/dev/null || true)"
-fi
-
+# 일반 (sensitive 아닌) 변수는 환경변수로 OK
 export TF_VAR_compartment_ocid="$OCI_COMPARTMENT_OCID"
-export TF_VAR_vcn_ocid="$OCI_VCN_OCID"
 export TF_VAR_subnet_ocid="$OCI_LB_SUBNET_OCID"
 export TF_VAR_ords_nodes="$HA_NODES"
 export TF_VAR_ords_port="$ORDS_PORT"
@@ -45,13 +28,50 @@ export TF_VAR_lb_bw_min="$LB_BANDWIDTH_MIN"
 export TF_VAR_lb_bw_max="$LB_BANDWIDTH_MAX"
 export TF_VAR_lb_is_private="$LB_IS_PRIVATE"
 
+# 인증서 PEM 은 환경변수 대신 임시 tfvars 파일(600) 로 전달
+SECRETS_TF=""
+cleanup() { [[ -n "$SECRETS_TF" && -f "$SECRETS_TF" ]] && shred -u "$SECRETS_TF" 2>/dev/null || rm -f "$SECRETS_TF"; }
+trap cleanup EXIT INT TERM
+
+if [[ -n "${OCI_CERT_OCID:-}" ]]; then
+  log "기존 OCI Cert OCID 사용: $OCI_CERT_OCID"
+  export TF_VAR_import_cert=false
+  export TF_VAR_cert_ocid="$OCI_CERT_OCID"
+else
+  require_env TLS_CERT_PEM TLS_KEY_PEM OCI_CERT_NAME
+  [[ -f "$TLS_CERT_PEM" ]] || die "TLS_CERT_PEM 없음: $TLS_CERT_PEM"
+  [[ -f "$TLS_KEY_PEM"  ]] || die "TLS_KEY_PEM  없음: $TLS_KEY_PEM"
+  log "사설 인증서 import: $OCI_CERT_NAME (tfvars 파일 권한 600 으로 주입)"
+
+  SECRETS_TF="$REPO_ROOT/terraform/.secrets.auto.tfvars"
+  umask 077
+  : > "$SECRETS_TF"
+  chmod 600 "$SECRETS_TF"
+  {
+    echo "import_cert = true"
+    printf 'cert_name = %s\n' "$(printf '%s' "$OCI_CERT_NAME" | sed 's/"/\\"/g; s/.*/"&"/')"
+    printf 'cert_pem  = <<__EOT_CERT__\n%s\n__EOT_CERT__\n' "$(cat "$TLS_CERT_PEM")"
+    printf 'key_pem   = <<__EOT_KEY__\n%s\n__EOT_KEY__\n'  "$(cat "$TLS_KEY_PEM")"
+    if [[ -n "${TLS_CHAIN_PEM:-}" && -f "$TLS_CHAIN_PEM" ]]; then
+      printf 'chain_pem = <<__EOT_CHAIN__\n%s\n__EOT_CHAIN__\n' "$(cat "$TLS_CHAIN_PEM")"
+    fi
+  } > "$SECRETS_TF"
+fi
+
 cd "$REPO_ROOT/terraform"
 
-cmd="${1:-apply}"
+cmd="${1:-apply}"; shift || true
+
+# init 은 첫 회 또는 명시적으로만. -upgrade 는 재현성 해치므로 옵션화.
+if [[ ! -d .terraform ]]; then
+  terraform init
+fi
+
 case "$cmd" in
-  plan)    terraform init -upgrade && terraform plan ;;
-  apply)   terraform init -upgrade && terraform apply -auto-approve ;;
-  destroy) terraform destroy -auto-approve ;;
-  output)  terraform output ;;
-  *) die "usage: $0 {plan|apply|destroy|output}";;
+  plan)    terraform plan    "$@" ;;
+  apply)   terraform apply -auto-approve "$@" ;;
+  destroy) terraform destroy -auto-approve "$@" ;;
+  output)  terraform output  "$@" ;;
+  upgrade) terraform init -upgrade ;;            # 의도적인 provider 업그레이드
+  *) die "usage: $0 {plan|apply|destroy|output|upgrade} [extra-args]";;
 esac
