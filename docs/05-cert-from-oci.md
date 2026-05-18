@@ -79,36 +79,19 @@ sudo $JAVA_HOME/bin/keytool -delete -alias ords-oci-chain \
   -keystore $JAVA_HOME/lib/security/cacerts -storepass changeit
 ```
 
-## 5.5 ORDS 가 직접 HTTPS 종단할 때 (LB 안 쓰는 구성)
+## 5.5 이 cookbook 에서 이 cert 의 용도
 
-이 cookbook 의 기본 모드는 **LB 종단**이라 이 절차는 자동화되어 있지 않음 (수동).
-LB 없이 ORDS 자체에서 HTTPS 를 받으려면:
+이 cookbook 은 **TLS 를 LB 에서 종단**합니다 (`docs/04-ha.md` 참고).
+따라서 OCI 에서 내려받은 cert/key 는 ORDS 가 직접 사용하지 않습니다.
+이 chapter 의 fetch 절차가 필요한 경우는:
 
-1) `.env` 에서 `ORDS_PORT` 를 HTTPS 포트로 변경:
-```bash
-ORDS_PORT=8443
-```
+- **OS truststore 등록** (§5.3) — 노드의 `curl`/`openssl` 이 사내 CA 발급
+  cert 를 신뢰하도록 (예: 내부 API 호출용)
+- **Java truststore 등록** (§5.4) — JVM 이 신뢰하도록 (ORDS 가 outbound 로
+  내부 HTTPS 호출할 때)
 
-2) `config/ords.service.tmpl` 의 `ExecStart` 에 `--secure` + cert 인자 추가하거나
-   `ords config set` 으로 standalone HTTPS 설정 주입:
-
-```bash
-sudo -u oracle /opt/oracle/ords/current/bin/ords --config /etc/ords/config \
-  config set standalone.https.port 8443
-sudo -u oracle /opt/oracle/ords/current/bin/ords --config /etc/ords/config \
-  config set standalone.https.cert /etc/ords/tls/cert.pem
-sudo -u oracle /opt/oracle/ords/current/bin/ords --config /etc/ords/config \
-  config set standalone.https.cert.key /etc/ords/tls/privkey.pem
-sudo systemctl restart ords
-```
-
-3) 검증:
-```bash
-curl --cacert /etc/ords/tls/chain.pem https://localhost:8443/ords/_/landing
-```
-
-> ⚠️ 운영 권장은 **LB 종단**. 직접 HTTPS 종단은 인증서 회전 시마다 모든 노드에서
-> 동시에 갱신 + restart 필요해 운영 부담이 큼.
+→ 즉 이 cert 들은 **클라이언트 신뢰용**이며, ORDS 가 서버로 종단하는 용도는 아닙니다.
+LB 가 cert 를 직접 참조하므로 ORDS 노드 OS 에는 PEM 이 없어도 됩니다.
 
 ## 5.6 자동 갱신 (rotation)
 

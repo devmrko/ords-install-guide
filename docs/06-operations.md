@@ -120,66 +120,61 @@ EOF
 sudo systemctl restart systemd-journald
 ```
 
-## 6.4 인증서 자동 갱신 (cron + 안전 가드)
+## 6.4 인증서 자동 갱신
 
-`05-cert-from-oci.md` §5.6 의 단순 cron 은 위험 (실패해도 systemd restart 강행).
-안전 버전:
+이 cookbook 은 **LB 종단** 구성. 인증서 회전은 두 갈래로 자동화됨:
 
-`/usr/local/sbin/ords-cert-refresh.sh`:
+### (1) LB 가 참조하는 cert — 자동
+OCI Certificate Service 에서 cert version 이 올라가면 **LB 가 자동으로 최신 version 사용**.
+ORDS 노드 측 작업 불필요. `terraform apply` 도 불필요.
+
+만료 알림은 OCI Certificate Service 의 알림 룰로:
+- 콘솔: Identity & Security → Certificates → 해당 cert → Rules → "Renewal" 알림 활성화
+- 30일 이전 / 7일 이전 두 단계로 알림
+
+### (2) OS / JVM truststore 의 chain — `flock` + 검증 cron
+
+`05-cert-from-oci.md` 의 fetch 절차로 받은 chain 을 OS/Java truststore 에
+넣어둔 경우, chain 이 회전되면 갱신 필요.
+
+`/usr/local/sbin/ords-trust-refresh.sh`:
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
 REPO=/opt/ords-install-guide
-LOCK=/var/lock/ords-cert-refresh.lock
-LOG=$REPO/logs/cert-refresh-$(date +%Y%m%d).log
+LOCK=/var/lock/ords-trust-refresh.lock
+LOG=$REPO/logs/trust-refresh-$(date +%Y%m%d).log
 
-# 1) 동시 실행 차단
+# 동시 실행 차단
 exec 9>"$LOCK"
 flock -n 9 || { echo "already running"; exit 0; }
 
 cd "$REPO"
 
-# 2) 새 PEM 받기 (실패하면 즉시 종료, 기존 파일 손상 안 시킴)
+# 새 chain PEM 받기 (실패하면 기존 truststore 손상 안 시킴)
 if ! ./run.sh fetch-cert >>"$LOG" 2>&1; then
-  echo "fetch failed — keeping previous cert" | tee -a "$LOG"
+  echo "fetch failed — keeping previous truststore" | tee -a "$LOG"
   exit 1
 fi
 
-# 3) PEM 유효성 검증
+# chain 유효성 검증
 source ./.env
-if ! openssl x509 -in "$TLS_CERT_PEM" -noout -checkend 0 >/dev/null 2>&1; then
-  echo "fetched cert is expired or invalid — abort restart" | tee -a "$LOG"
-  exit 1
+if [[ -f "$TLS_CHAIN_PEM" ]]; then
+  openssl crl2pkcs7 -nocrl -certfile "$TLS_CHAIN_PEM" \
+    | openssl pkcs7 -print_certs -noout >>"$LOG" 2>&1 \
+    || { echo "chain PEM invalid — abort"; exit 1; }
 fi
 
-# 4) cert/key 매칭 검증 (직접 HTTPS 종단인 경우만)
-if [[ -f "$TLS_KEY_PEM" ]]; then
-  CERT_MOD=$(openssl x509 -noout -modulus -in "$TLS_CERT_PEM" | openssl md5)
-  KEY_MOD=$( openssl rsa  -noout -modulus -in "$TLS_KEY_PEM"  | openssl md5)
-  [[ "$CERT_MOD" == "$KEY_MOD" ]] || { echo "cert/key modulus mismatch — abort"; exit 1; }
-fi
-
-# 5) ORDS 직접 종단인 경우만 restart (LB 종단이면 restart 불필요)
-if grep -q 'standalone.https.cert' /etc/ords/config/databases/default/pool.xml 2>/dev/null; then
-  systemctl reload-or-restart ords
-  sleep 5
-  if ! curl -fsS --max-time 5 https://localhost:${ORDS_PORT:-8443}/ords/_/landing >/dev/null; then
-    echo "restart succeeded but healthcheck failed — manual intervention" | tee -a "$LOG"
-    exit 1
-  fi
-fi
-
-echo "$(date) — cert refreshed OK" | tee -a "$LOG"
+echo "$(date) — trust refreshed OK" | tee -a "$LOG"
 ```
 
 cron:
 ```
-0 3 * * * /usr/local/sbin/ords-cert-refresh.sh
+0 3 * * * /usr/local/sbin/ords-trust-refresh.sh
 ```
 
 핵심:
 - `flock` 으로 동시 실행 차단
-- fetch 실패 시 기존 cert 유지 (덮어쓰지 않음)
-- openssl 로 cert 만료/유효성 검증
-- cert/key modulus 비교로 mismatch 차단
-- 직접 HTTPS 종단인 경우만 restart, 그 후 healthcheck 확인 후 성공 처리
+- fetch 실패 시 기존 truststore 유지
+- openssl 로 chain 유효성 검증
+- ORDS restart 불필요 (LB 종단이라 ORDS 가 cert 안 가짐)
