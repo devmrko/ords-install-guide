@@ -22,17 +22,21 @@ else
 
   # zip 안 최상위 디렉토리 이름이 보통 'ords-X.Y.Z'
   TMP=$(mktemp -d)
+  trap 'rm -rf "$TMP"' EXIT INT TERM
   as_root unzip -q "$DOWNLOAD_DIR/ords.zip" -d "$TMP"
   TOP=$(ls -1 "$TMP" | head -1)
   VERSIONED="$ORDS_BASE/$TOP"
 
-  log "2/3 배치: $VERSIONED"
-  as_root mv "$TMP/$TOP" "$VERSIONED"
-  rm -rf "$TMP"
+  if [[ -d "$VERSIONED" ]]; then
+    log "2/3 동일 버전 디렉토리 이미 존재 — 재배치 skip: $VERSIONED"
+  else
+    log "2/3 배치: $VERSIONED"
+    as_root mv "$TMP/$TOP" "$VERSIONED"
+  fi
 
   log "3/3 alias symlink: $ORDS_HOME -> $VERSIONED"
   as_root ln -sfn "$VERSIONED" "$ORDS_HOME"
-  as_root chown -R "$ORDS_USER:$ORDS_GROUP" "$VERSIONED" "$ORDS_HOME"
+  as_root chown -RH "$ORDS_USER:$ORDS_GROUP" "$VERSIONED" "$ORDS_HOME"
   ok "ORDS 설치 완료"
 fi
 

@@ -27,17 +27,25 @@ source ./.env
 source ./scripts/lib/common.sh
 init_logging
 
-# 비밀번호 비어있으면 프롬프트
-if [[ -z "${ADMIN_PASSWORD:-}" ]]; then
-  read -rsp "ADB ADMIN_PASSWORD: " ADMIN_PASSWORD; echo
-  export ADMIN_PASSWORD
-fi
-if [[ -z "${ORDS_PUBLIC_USER_PASSWORD:-}" ]]; then
-  read -rsp "ORDS_PUBLIC_USER_PASSWORD: " ORDS_PUBLIC_USER_PASSWORD; echo
-  export ORDS_PUBLIC_USER_PASSWORD
-fi
-
 cmd="${1:-all}"; shift || true
+
+# DB 비밀번호는 실제로 필요한 커맨드일 때만 프롬프트
+case "$cmd" in
+  configure|smoke|all)
+    [[ -z "${ADMIN_PASSWORD:-}" ]] && {
+      read -rsp "ADB ADMIN_PASSWORD: " ADMIN_PASSWORD; echo
+      export ADMIN_PASSWORD
+    }
+    [[ -z "${ORDS_DB_USER_PASSWORD:-}" ]] && {
+      read -rsp "ORDS_DB_USER_PASSWORD (런타임 계정): " ORDS_DB_USER_PASSWORD; echo
+      export ORDS_DB_USER_PASSWORD
+    }
+    [[ -z "${ORDS_GATEWAY_USER_PASSWORD:-}" ]] && {
+      read -rsp "ORDS_GATEWAY_USER_PASSWORD (PL/SQL gateway): " ORDS_GATEWAY_USER_PASSWORD; echo
+      export ORDS_GATEWAY_USER_PASSWORD
+    }
+    ;;
+esac
 
 case "$cmd" in
   prereq)    bash scripts/00_prereq.sh ;;
@@ -46,7 +54,7 @@ case "$cmd" in
   start)     bash scripts/03_start.sh ;;
   smoke)     bash scripts/04_smoke.sh ;;
   ha)        bash scripts/05_ha.sh ;;
-  ha-tf)     bash scripts/06_lb_terraform.sh "${1:-apply}" ;;
+  ha-tf)     bash scripts/06_lb_terraform.sh "$@" ;;
   fetch-cert) bash scripts/07_fetch_oci_cert.sh ;;
   teardown)  bash scripts/99_teardown.sh ;;
   all)

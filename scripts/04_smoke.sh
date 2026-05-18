@@ -9,7 +9,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$REPO_ROOT/.env"
 source "$REPO_ROOT/scripts/lib/common.sh"
 
-require_env ORDS_PORT ADB_TNS ADMIN_USER ADMIN_PASSWORD WALLET_PATH
+require_env ORDS_PORT ADB_TNS ADMIN_USER ADMIN_PASSWORD WALLET_PATH ORDS_USER ORDS_GROUP
 
 export TNS_ADMIN="$WALLET_PATH"
 SQLCL=/opt/oracle/sqlcl/bin/sql

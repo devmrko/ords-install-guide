@@ -14,7 +14,8 @@ source "$REPO_ROOT/scripts/lib/common.sh"
 require_env ORDS_USER ORDS_GROUP JAVA_HOME JDK_URL DOWNLOAD_DIR
 
 log "0/4 명령 확인"
-need_cmd wget unzip tar curl
+# zip 은 wallet.zip 자동생성에, envsubst(gettext)는 systemd unit 렌더에 필요
+need_cmd wget unzip tar curl zip envsubst
 
 log "1/4 oracle 유저/그룹"
 getent group  "$ORDS_GROUP" >/dev/null || as_root groupadd "$ORDS_GROUP"

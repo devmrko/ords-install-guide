@@ -1,6 +1,9 @@
 # Secrets / local config
 .env
+.env.*
+!.env.example
 wallet/
+wallet.zip
 *.p12
 *.sso
 *.pem
@@ -22,7 +25,11 @@ terraform/.terraform/
 terraform/.terraform.lock.hcl
 terraform/*.tfstate
 terraform/*.tfstate.*
-terraform/terraform.tfvars
+*.tfvars
+*.tfvars.json
+!terraform.tfvars.example
+terraform/backend.tf
+terraform/.secrets.auto.tfvars
 terraform/crash.log
 
 # OS

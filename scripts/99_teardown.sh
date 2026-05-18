@@ -10,6 +10,8 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$REPO_ROOT/.env"
 source "$REPO_ROOT/scripts/lib/common.sh"
 
+require_env ORDS_CONFIG
+
 read -rp "정말 teardown? (y/N) " ans
 [[ "$ans" =~ ^[yY]$ ]] || { log "취소"; exit 0; }
 

@@ -13,7 +13,7 @@ source "$REPO_ROOT/scripts/lib/common.sh"
 
 need_cmd oci jq
 
-require_env OCI_CERT_OCID
+require_env OCI_CERT_OCID ORDS_USER ORDS_GROUP JAVA_HOME
 [[ -z "${TLS_CERT_PEM:-}"  ]] && TLS_CERT_PEM=/etc/ords/tls/cert.pem
 [[ -z "${TLS_KEY_PEM:-}"   ]] && TLS_KEY_PEM=/etc/ords/tls/privkey.pem
 [[ -z "${TLS_CHAIN_PEM:-}" ]] && TLS_CHAIN_PEM=/etc/ords/tls/chain.pem
@@ -38,16 +38,28 @@ VERSION=$(jq -r '.data."version-number" // "?"'     "$TMP")
 SERIAL=$( jq -r '.data."serial-number" // "?"'      "$TMP")
 
 [[ -z "$CERT" ]] && die "cert PEM 비어있음 — OCI 권한 확인 (CERTIFICATE_CONTENT_WITH_PRIVATE_KEY 읽기)"
-[[ -z "$KEY"  ]] && warn "private-key-pem 이 비어있음. OCI Cert Service 에서 관리하는 키는 export 불가일 수 있음."
 
-log "2/4 PEM 파일 쓰기"
-printf '%s' "$CERT"  | as_root tee "$TLS_CERT_PEM"  >/dev/null
-[[ -n "$KEY" ]]   && printf '%s' "$KEY"   | as_root tee "$TLS_KEY_PEM"   >/dev/null
-[[ -n "$CHAIN" ]] && printf '%s' "$CHAIN" | as_root tee "$TLS_CHAIN_PEM" >/dev/null
+if [[ -z "$KEY" ]]; then
+  warn "private-key-pem 비어있음 — OCI 내부 발급 cert 는 키 export 불가."
+  warn "기존 key 파일이 있다면 cert 와 mismatch 되지 않게 제거합니다: $TLS_KEY_PEM"
+  as_root rm -f "$TLS_KEY_PEM"
+fi
 
-as_root chmod 644 "$TLS_CERT_PEM" "${TLS_CHAIN_PEM:-/dev/null}" 2>/dev/null || true
-[[ -f "$TLS_KEY_PEM" ]] && as_root chmod 600 "$TLS_KEY_PEM"
-as_root chown "${ORDS_USER}:${ORDS_GROUP}" "$TLS_CERT_PEM" "$TLS_KEY_PEM" "$TLS_CHAIN_PEM" 2>/dev/null || true
+log "2/4 PEM 파일 쓰기 (atomic + 권한 명시)"
+# install -m 으로 권한 박아서 한 번에 배치 (race 회피)
+TMP=$(mktemp); trap 'rm -f "$TMP"' EXIT
+printf '%s' "$CERT" > "$TMP"
+as_root install -o "$ORDS_USER" -g "$ORDS_GROUP" -m 644 "$TMP" "$TLS_CERT_PEM"
+
+if [[ -n "$KEY" ]]; then
+  printf '%s' "$KEY" > "$TMP"
+  as_root install -o "$ORDS_USER" -g "$ORDS_GROUP" -m 600 "$TMP" "$TLS_KEY_PEM"
+fi
+
+if [[ -n "$CHAIN" ]]; then
+  printf '%s' "$CHAIN" > "$TMP"
+  as_root install -o "$ORDS_USER" -g "$ORDS_GROUP" -m 644 "$TMP" "$TLS_CHAIN_PEM"
+fi
 
 ok "  cert : $TLS_CERT_PEM  (version=$VERSION serial=$SERIAL)"
 [[ -f "$TLS_KEY_PEM"   ]] && ok "  key  : $TLS_KEY_PEM"
