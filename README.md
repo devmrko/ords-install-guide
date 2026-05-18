@@ -105,39 +105,45 @@ LB:
 
 ```
 ords-install-guide/
-├── README.md
-├── run.sh                  # 단일 진입점 (디스패처)
-├── .env.example
-├── .gitignore
-├── docs/
-│   ├── 01-install.md       # 사전준비 + JDK alias + ORDS 다운로드/배치
-│   ├── 02-configure.md     # ords install (pool, wallet 연결)
-│   ├── 03-run.md           # systemd, 로그, smoke test
-│   ├── 04-ha.md            # 2노드+ LB, 웹콘솔/Terraform, 사설 cert 등록
-│   ├── 05-cert-from-oci.md # OCI Cert Service → OS 로 가져와 신뢰 등록
-│   └── 06-operations.md    # 백업/복구, 모니터링, logrotate, cert 자동갱신
-├── scripts/
-│   ├── 00_prereq.sh
-│   ├── 01_install.sh
-│   ├── 02_configure.sh
-│   ├── 03_start.sh
-│   ├── 04_smoke.sh
-│   ├── 05_ha.sh
-│   ├── 06_lb_terraform.sh
-│   ├── 07_fetch_oci_cert.sh
-│   ├── 99_teardown.sh
-│   └── lib/common.sh
+├── README.md                       # 본 문서 — Prereq + IAM 정책 + Quickstart + 구조
+├── run.sh                          # 단일 진입점 디스패처. 모든 작업은 ./run.sh <subcmd> 로 통일
+├── .env.example                    # 환경변수 템플릿. cp .env.example .env 후 값 채움 (gitignored)
+├── .gitignore                      # .env, wallet, *.pem, terraform state 등 비밀 차단
+│
+├── docs/                           # 절차/배경/트러블슈팅 문서. 스크립트와 1:1 매핑은 아님
+│   ├── 01-install.md               # JDK/ORDS/sqlcl 다운로드 + alias symlink 패턴 설명
+│   ├── 02-configure.md             # ords install adb 흐름: pool 생성 + wallet 연결 + 계정 3종
+│   ├── 03-run.md                   # systemd unit 동작 + 로그 위치 + smoke test 해석
+│   ├── 04-ha.md                    # 2노드 + OCI LB + 사설 TLS — 웹콘솔/Terraform 양트랙 + DNS/hosts 설명
+│   ├── 05-cert-from-oci.md         # OCI Cert Service의 cert를 OS truststore/JVM truststore에 등록
+│   └── 06-operations.md            # 배포 후: 백업/복구, 모니터링, logrotate, cert 자동갱신 cron
+│
+├── scripts/                        # 모두 idempotent. 재실행 시 기존 상태 감지하면 skip
+│   ├── 00_prereq.sh                # 패키지 확인(wget/unzip/...) + oracle 유저 생성 + JDK21 + firewalld/ufw 8080 개방
+│   ├── 01_install.sh               # ORDS zip + sqlcl zip 다운 → /opt/oracle/ords/ords-X.Y.Z + symlink (24.x flat / older nested 자동 감지)
+│   ├── 02_configure.sh             # wallet.zip 자동 생성 + ords install adb --silent (admin/db_user/gateway_user 3계정) + jdbc pool 사이즈 set
+│   ├── 03_start.sh                 # config/ords.service.tmpl 을 envsubst로 치환 → /etc/systemd/system/ + enable + start
+│   ├── 04_smoke.sh                 # sqlcl로 ADB SELECT 1 + curl /ords/_/landing 응답코드 확인 (200/302 OK)
+│   ├── 05_ha.sh                    # secondary 노드 부트스트랩 안내 + 양 노드 health 확인 (LB는 별도 ha-tf 또는 콘솔)
+│   ├── 06_lb_terraform.sh          # terraform 래퍼. PEM은 환경변수 대신 .secrets.auto.tfvars(600) 로 주입 (ps/proc 노출 방지)
+│   ├── 07_fetch_oci_cert.sh        # OCI CLI로 cert-bundle get → /etc/ords/tls/*.pem 으로 저장 (rotation 시 재실행)
+│   ├── 99_teardown.sh              # 역순 정리. systemd disable → 디렉토리 삭제. 확인 프롬프트 있음
+│   └── lib/common.sh               # 공용 함수: log/ok/warn/die, as_root, require_env, need_cmd, fetch(wget+retry), init_logging
+│
 ├── sql/
-│   └── smoke_test.sql
+│   └── smoke_test.sql              # 04_smoke.sh가 sqlcl로 던질 SQL — SELECT 1 from dual, ORDS 메타 확인 등
+│
 ├── config/
-│   └── ords.service.tmpl   # systemd unit (envsubst로 치환)
-└── terraform/
-    ├── README.md
-    ├── main.tf             # LB + backend set + listener + 사설 cert (LB-attached PEM)
-    ├── network.tf          # (선택) VCN + IG + RT + SL + Subnet — create_network=true 시
-    ├── variables.tf
-    ├── outputs.tf
-    └── terraform.tfvars.example
+│   └── ords.service.tmpl           # systemd unit 템플릿. ${ORDS_HOME}, ${ORDS_CONFIG}, ${JAVA_HOME}, ${ORDS_USER}, ${ORDS_PORT} 치환
+│
+└── terraform/                      # ha-tf 트랙 전용 (LB + 선택적 VCN). state는 기본 local backend
+    ├── README.md                   # terraform 디렉토리 사용법 + state 보안 + remote backend 마이그레이션
+    ├── main.tf                     # LB(Flexible) + backend_set + HTTP(80→443 redirect)/HTTPS(443) listener + oci_load_balancer_certificate(LB-attached PEM)
+    ├── network.tf                  # (선택) OCI_CREATE_NETWORK=true 면 VCN+IG+RT+SL+Subnet 자동 생성. 아니면 var.subnet_ocid 그대로 사용
+    ├── variables.tf                # 모든 입력 변수 정의 (region, compartment, network mode, LB shape/BW, cert PEM, healthcheck 등)
+    ├── outputs.tf                  # lb_public_ip, lb_ocid, cert_ref, vcn_ocid, subnet_ocid — 후속 작업이 참조
+    ├── terraform.tfvars.example    # tfvars 직접 채우고 싶을 때 (보통은 .env → TF_VAR_* 자동 주입 쓰면 됨)
+    └── backend.tf.example          # 운영 전환 시 OCI Object Storage로 state 옮길 때 참고할 backend 설정
 ```
 
 ---
