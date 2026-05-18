@@ -2,21 +2,54 @@
 -- 04_seed.sql
 -- Connect as: &VECTOR_DEMO_USER
 --
--- 샘플 문서 12건을 적재. embedding 컬럼은 VECTOR_EMBEDDING() 으로
--- 서버 측에서 자동 계산 (DOC_MODEL 사용).
+-- 샘플 문서 12건 적재 + 두 OCI GenAI Cohere 모델로 서버측 임베딩 자동 계산.
+--   - embedding_v3 : cohere.embed-multilingual-v3.0 (1024-dim)
+--   - embedding_v4 : cohere.embed-v4.0              (1024-dim 기본)
 --
--- 멱등성: 같은 title 로 적재된 row 가 있으면 skip
--- DEFINE: &VECTOR_MODEL_NAME
+-- 멱등성: title 기준으로 중복 행 INSERT skip.
+--         기존 행도 embedding_v3/v4 가 NULL 이면 UPDATE 로 채움.
+--
+-- DEFINE: &OCI_GENAI_CREDENTIAL, &OCI_GENAI_ENDPOINT,
+--         &OCI_GENAI_MODEL_V3, &OCI_GENAI_MODEL_V4
 -- ============================================================
 set serveroutput on
 set echo on
 set define on
 whenever sqlerror exit sql.sqlcode
 
-prompt -- 1) 기존 행 수 확인
-select count(*) as existing_rows from doc_chunks;
+prompt -- 1) 두 모델 호출용 JSON 파라미터 헬퍼 함수 (지역적 — 세션 종료 시 사라짐)
+-- input_type 은 cohere 요구사항: 적재(문서)는 search_document, 검색(쿼리)은 search_query
+create or replace function emb_v3(p_text clob, p_input_type varchar2 default 'search_document')
+return vector authid current_user is
+  l_params json;
+begin
+  l_params := json('{
+    "provider": "ocigenai",
+    "credential_name": "&OCI_GENAI_CREDENTIAL",
+    "url": "&OCI_GENAI_ENDPOINT",
+    "model": "&OCI_GENAI_MODEL_V3",
+    "input_type": "' || p_input_type || '"
+  }');
+  return dbms_vector.utl_to_embedding(p_text, l_params);
+end;
+/
 
-prompt -- 2) 샘플 적재 (중복 방지 — title 기준)
+create or replace function emb_v4(p_text clob, p_input_type varchar2 default 'search_document')
+return vector authid current_user is
+  l_params json;
+begin
+  l_params := json('{
+    "provider": "ocigenai",
+    "credential_name": "&OCI_GENAI_CREDENTIAL",
+    "url": "&OCI_GENAI_ENDPOINT",
+    "model": "&OCI_GENAI_MODEL_V4",
+    "input_type": "' || p_input_type || '"
+  }');
+  return dbms_vector.utl_to_embedding(p_text, l_params);
+end;
+/
+
+prompt -- 2) 샘플 데이터 정의 + 적재
 declare
   type t_row is record (
     title varchar2(200),
@@ -56,39 +89,55 @@ begin
   for i in 1 .. l_data.count loop
     select count(*) into l_cnt from doc_chunks where title = l_data(i).title;
     if l_cnt = 0 then
-      execute immediate
-        'insert into doc_chunks (title, content, embedding) ' ||
-        'values (:1, :2, vector_embedding(' || '&VECTOR_MODEL_NAME' || ' using :3 as data))'
-        using l_data(i).title, l_data(i).body, l_data(i).body;
+      insert into doc_chunks (title, content, embedding_v3, embedding_v4)
+      values (
+        l_data(i).title,
+        l_data(i).body,
+        emb_v3(l_data(i).body),
+        emb_v4(l_data(i).body)
+      );
+    else
+      -- 기존 행이 NULL 임베딩이면 백필
+      update doc_chunks
+         set embedding_v3 = nvl(embedding_v3, emb_v3(content)),
+             embedding_v4 = nvl(embedding_v4, emb_v4(content))
+       where title = l_data(i).title;
     end if;
   end loop;
   commit;
 end;
 /
 
-prompt -- 3) 적재 결과
-column id    format 999
-column title format a25
-column dim   format 999
-select id, title, vector_dimension_count(embedding) as dim
+prompt -- 3) 적재 결과 — 두 모델의 임베딩 차원이 정상인지 확인
+column id      format 999
+column title   format a25
+column dim_v3  format 999
+column dim_v4  format 999
+select id, title,
+       vector_dimension_count(embedding_v3) as dim_v3,
+       vector_dimension_count(embedding_v4) as dim_v4
   from doc_chunks
  order by id;
 
-prompt -- 4) (옵션) 인덱스가 03 단계에서 누락되었다면 지금 만든다 (데이터 있는 상태)
+prompt -- 4) 벡터 인덱스 생성 (이미 있으면 skip)
 declare
-  l_cnt number;
+  procedure ensure_vidx(p_idx varchar2, p_col varchar2) is
+    l_cnt number;
+  begin
+    select count(*) into l_cnt from user_indexes where index_name = upper(p_idx);
+    if l_cnt = 0 then
+      execute immediate
+        'create vector index ' || p_idx ||
+        ' on doc_chunks (' || p_col || ')' ||
+        ' organization neighbor partitions distance cosine with target accuracy 95';
+      dbms_output.put_line('created index: ' || p_idx);
+    end if;
+  exception when others then
+    dbms_output.put_line('skip index ' || p_idx || ': ' || sqlerrm);
+  end;
 begin
-  select count(*) into l_cnt from user_indexes where index_name = 'DOC_CHUNKS_EMB_IDX';
-  if l_cnt = 0 then
-    execute immediate q'[
-      create vector index doc_chunks_emb_idx
-        on doc_chunks (embedding)
-        organization neighbor partitions
-        distance cosine
-        with target accuracy 95
-    ]';
-    dbms_output.put_line('vector index created (after seed)');
-  end if;
+  ensure_vidx('doc_chunks_v3_idx', 'embedding_v3');
+  ensure_vidx('doc_chunks_v4_idx', 'embedding_v4');
 end;
 /
 

@@ -38,6 +38,25 @@ grant db_developer_role to &VECTOR_DEMO_USER;
 grant create session, create table, create procedure, create view to &VECTOR_DEMO_USER;
 grant execute on dbms_cloud to &VECTOR_DEMO_USER;
 grant execute on dbms_vector to &VECTOR_DEMO_USER;
+grant execute on dbms_vector_chain to &VECTOR_DEMO_USER;
+
+prompt -- 2b) OCI Generative AI 엔드포인트로 outbound HTTP ACL 부여
+-- DBMS_VECTOR.UTL_TO_EMBEDDING 가 ocigenai provider 호출 시 필요.
+-- 이미 같은 PRINCIPAL/HOST 조합이 있으면 APPEND_HOST_ACE 가 멱등하게 처리.
+declare
+  l_host varchar2(200) := regexp_substr('&OCI_GENAI_ENDPOINT', 'https?://([^/]+)', 1, 1, null, 1);
+begin
+  dbms_network_acl_admin.append_host_ace(
+    host => l_host,
+    ace  => xs$ace_type(
+              privilege_list => xs$name_list('http'),
+              principal_name => upper('&VECTOR_DEMO_USER'),
+              principal_type => xs_acl.ptype_db)
+  );
+  commit;
+  dbms_output.put_line('ACL granted: ' || upper('&VECTOR_DEMO_USER') || ' -> ' || l_host);
+end;
+/
 
 prompt -- 3) ORDS 스키마 활성화 (BASE_PATH = vector)
 declare

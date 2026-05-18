@@ -4,8 +4,8 @@
 --
 -- 벡터 데모로 생성된 리소스를 전부 제거.
 --   - VECTOR_DEMO 사용자 (CASCADE — 테이블/인덱스/ORDS 메타 동반 삭제)
---   - DOC_MODEL ONNX 모델
---   - (DATA_PUMP_DIR 안의 다운로드 zip 은 남겨둠 — 다음 재설치 시 재사용)
+--   - (선택) ONNX 모델 DOC_MODEL — optional_load_onnx.sql 을 돌렸을 때만 존재
+--   - GenAI 호스트 ACE 는 다른 사용자가 같은 호스트에 grant 받았을 수 있으므로 그대로 둠
 --
 -- DEFINE: &VECTOR_DEMO_USER, &VECTOR_MODEL_NAME
 -- ============================================================
@@ -49,29 +49,29 @@ begin
 end;
 /
 
-prompt -- 3) ONNX 모델 drop
+prompt -- 3) (선택) ONNX 모델 drop — optional_load_onnx.sql 사용 시에만 존재
 declare
   l_cnt number;
 begin
-  select count(*) into l_cnt from user_mining_models
+  select count(*) into l_cnt from dba_mining_models
    where model_name = upper('&VECTOR_MODEL_NAME');
   if l_cnt > 0 then
-    dbms_vector.drop_onnx_model(model_name => '&VECTOR_MODEL_NAME');
-    dbms_output.put_line('model &VECTOR_MODEL_NAME dropped');
+    begin
+      dbms_vector.drop_onnx_model(model_name => '&VECTOR_MODEL_NAME');
+      dbms_output.put_line('model &VECTOR_MODEL_NAME dropped');
+    exception
+      when others then
+        -- 일부 ADB 버전은 DBMS_DATA_MINING.DROP_MODEL 만 지원
+        execute immediate 'begin dbms_data_mining.drop_model(model_name => :1); end;'
+          using '&VECTOR_MODEL_NAME';
+        dbms_output.put_line('model &VECTOR_MODEL_NAME dropped (via dbms_data_mining)');
+    end;
   else
-    dbms_output.put_line('model &VECTOR_MODEL_NAME not present - skip');
+    dbms_output.put_line('model &VECTOR_MODEL_NAME not present - skip (default flow is GenAI-only)');
   end if;
 exception
   when others then
-    -- 일부 ADB 버전은 DBMS_DATA_MINING.DROP_MODEL 만 지원
-    begin
-      execute immediate 'begin dbms_data_mining.drop_model(model_name => :1); end;'
-        using '&VECTOR_MODEL_NAME';
-      dbms_output.put_line('model &VECTOR_MODEL_NAME dropped (via dbms_data_mining)');
-    exception
-      when others then
-        dbms_output.put_line('model drop failed: ' || sqlerrm);
-    end;
+    dbms_output.put_line('model drop failed (continuing): ' || sqlerrm);
 end;
 /
 
