@@ -36,12 +36,48 @@ NEW_JDK=$(ls -1dt /opt/java/jdk-* | head -1)
 sudo ln -sfn "$NEW_JDK" /opt/java/current
 ```
 
-> **라이선스**: Oracle JDK 는 OTN(NFTC) 라이선스로 **OCI 위에서 운영 사용 무료**.
-> 다른 클라우드/온프렘에서 운영 사용하려면 라이선스 확인 필요 — 그 경우 Temurin 같은
-> OpenJDK 빌드로 갈아끼우는 게 안전:
-> ```bash
-> # JDK_URL=https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jdk/hotspot/normal/eclipse
-> ```
+### 왜 Oracle JDK인가 (OCI 배포 기준)
+
+#### 라이선스 — OCI에서는 그냥 무료
+
+- **NFTC (No-Fee Terms and Conditions)** 라이선스가 Java 17부터 적용 — **운영(상용 포함) 무료**
+- 추가로 OCI 컴퓨트 인스턴스에서 Oracle JDK를 쓰면 **"Oracle Linux 가입자 혜택"** 으로
+  무한 갱신/지원 묶음 (별도 구독 불필요)
+- Oracle Linux 8/9 의 기본 yum 리포에 `jdk-21` 들어있어 `dnf install jdk-21` 로도 가능
+  (이 가이드는 일관성 위해 wget + symlink 패턴 유지)
+
+> 비교: 다른 클라우드/온프렘 운영에서는 NFTC 가 적용은 되지만 **지원/패치 의무**가 다름.
+> OCI 밖이면 Temurin/Corretto 같은 OpenJDK 디스트로 가는 게 깔끔.
+
+#### OCI 환경에서 Oracle JDK 이점
+
+| 항목 | 내용 |
+|---|---|
+| **JMS (Java Management Service)** | OCI 콘솔에서 fleet 단위 JDK 인벤토리/취약점 스캔/사용추적 — **OCI 사용자 무료** |
+| **GraalVM Enterprise** | OCI 위에서는 GraalVM **Enterprise** edition 무료. JIT/AOT 성능 향상 (ORDS 같은 long-running JVM 에 유의미한 throughput 개선) |
+| **패치 주기** | 분기별 CPU(Critical Patch Update) 즉시 반영. OpenJDK 디스트로 들 보다 보통 빠름 |
+| **Oracle Linux 통합** | yum 리포 + `update-crypto-policies` 같은 OL 보안 정책과 호환 가장 잘 검증됨 |
+| **ORDS 와 같은 벤더** | 호환성 이슈 발생 시 Oracle 지원 한 곳에서 처리 (ORDS + JDK + ADB 모두 Oracle) |
+| **장기 LTS** | Java 21 LTS = 2031년까지 패치 (NFTC 무료 패치는 다음 LTS 출시 + 1년까지) |
+
+#### Temurin 대비 실질 차이 (OCI 안에서)
+
+- 코어 JVM은 OpenJDK upstream으로 거의 동일
+- 차이는 **번들 도구 + 운영 도구 + 지원**:
+  - Oracle JDK + GraalVM EE = JIT 향상
+  - Oracle JDK + JMS = 운영 관측성
+  - 둘 다 OCI 사용자만 무료
+- → **OCI 운영이면 Oracle JDK 가 명확한 선택**. 그 외에는 별 차이 없음.
+
+#### 폴백 (OCI 아닐 때)
+
+`.env` 의 `JDK_URL` 만 갈아끼우면 됨:
+```bash
+# Temurin
+JDK_URL=https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jdk/hotspot/normal/eclipse
+# Amazon Corretto
+JDK_URL=https://corretto.aws/downloads/latest/amazon-corretto-21-x64-linux-jdk.tar.gz
+```
 
 이후 모든 곳에서 **`JAVA_HOME=/opt/java/current`** 만 참조. 업그레이드 시:
 ```bash
