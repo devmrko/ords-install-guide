@@ -100,7 +100,10 @@ ords-install-guide/
 ./run.sh teardown    # 역순 정리
 ```
 
-모든 스텝은 **idempotent** — 다시 돌려도 망가지지 않음.
+대부분 스텝은 **idempotent** — 재실행 시 기존 상태 감지하면 skip.
+예외:
+- `teardown` 은 의도적으로 1회성 (확인 프롬프트 있음)
+- `configure` 의 `ords install adb` 는 풀이 이미 있으면 skip 하지만, 부분 실패 후 재시도는 `99_teardown.sh` 로 config 비운 뒤 재시도가 안전
 
 ---
 

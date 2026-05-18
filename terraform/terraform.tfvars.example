@@ -3,7 +3,6 @@
 #   cp terraform.tfvars.example terraform.tfvars
 
 compartment_ocid = "ocid1.compartment.oc1..xxxx"
-vcn_ocid         = "ocid1.vcn.oc1..xxxx"
 subnet_ocid      = "ocid1.subnet.oc1..xxxx"
 
 ords_nodes        = "10.0.1.11 10.0.1.12"

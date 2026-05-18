@@ -1,5 +1,4 @@
 variable "compartment_ocid" { type = string }
-variable "vcn_ocid"         { type = string }
 variable "subnet_ocid"      { type = string }
 
 variable "ords_nodes" {
