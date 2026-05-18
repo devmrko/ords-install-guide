@@ -58,6 +58,31 @@ begin
 end;
 /
 
+prompt -- 2c) VECTOR_DEMO 스키마에 Resource Principal 활성화
+-- OCI$RESOURCE_PRINCIPAL credential 은 호출 사용자의 스키마에 존재해야 함.
+-- ADMIN 이 DBMS_CLOUD_ADMIN.ENABLE_RESOURCE_PRINCIPAL(username) 호출로
+-- 대상 스키마에 RP credential 을 자동 생성/연결.
+-- 단, ADB 의 Resource Principal 자체가 먼저 활성화되어 있어야 함
+-- (안 되어 있으면 ENABLE_RESOURCE_PRINCIPAL() 인자 없이 한번 호출 필요).
+begin
+  begin
+    dbms_cloud_admin.enable_resource_principal(username => upper('&VECTOR_DEMO_USER'));
+    dbms_output.put_line('resource principal enabled for &VECTOR_DEMO_USER');
+  exception
+    when others then
+      if sqlcode in (-20000, -20001, -20003) then
+        -- ADB 전체에 RP 가 아직 enable 안 된 경우 — 먼저 켜고 다시 시도
+        dbms_cloud_admin.enable_resource_principal;
+        dbms_cloud_admin.enable_resource_principal(username => upper('&VECTOR_DEMO_USER'));
+        dbms_output.put_line('ADB-level RP enabled, then &VECTOR_DEMO_USER RP enabled');
+      else
+        dbms_output.put_line('RP enable failed (continuing): ' || sqlerrm);
+      end if;
+  end;
+  commit;
+end;
+/
+
 prompt -- 3) ORDS 스키마 활성화 (BASE_PATH = vector)
 declare
   l_enabled boolean := false;
