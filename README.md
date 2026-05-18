@@ -59,7 +59,8 @@ ords-install-guide/
 │   ├── 02-configure.md     # ords install (pool, wallet 연결)
 │   ├── 03-run.md           # systemd, 로그, smoke test
 │   ├── 04-ha.md            # 2노드+ LB, 웹콘솔/Terraform, 사설 cert 등록
-│   └── 05-cert-from-oci.md # OCI Cert Service → OS 로 가져와 신뢰 등록
+│   ├── 05-cert-from-oci.md # OCI Cert Service → OS 로 가져와 신뢰 등록
+│   └── 06-operations.md    # 백업/복구, 모니터링, logrotate, cert 자동갱신
 ├── scripts/
 │   ├── 00_prereq.sh
 │   ├── 01_install.sh
@@ -119,4 +120,9 @@ ords-install-guide/
 
 ## 트러블슈팅
 
-`docs/04-ha.md` 말미와 각 스텝 스크립트 실패 시 `logs/run-*.log` 참고.
+각 스텝 스크립트 실패 시 `logs/run-*.log` 참고.
+도구별 최소 버전: `oci ≥ 3.40`, `terraform ≥ 1.3`, `jq ≥ 1.6`, `openssl ≥ 1.1.1`.
+
+## 운영 (deploy 후)
+
+`docs/06-operations.md` — 백업/복구 절차, 모니터링 지표, logrotate, 인증서 자동갱신 안전 cron.
