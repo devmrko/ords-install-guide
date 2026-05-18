@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# ============================================================
+# run.sh  —  ORDS install cookbook 단일 진입점
+#
+# Usage:
+#   ./run.sh prereq | install | configure | start | smoke
+#   ./run.sh ha | ha-tf {plan|apply|destroy|output}
+#   ./run.sh fetch-cert     # OCI Cert Service → OS 로 cert PEM 내려받아 등록
+#   ./run.sh all       (= prereq install configure start smoke)
+#   ./run.sh teardown
+# ============================================================
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
+cd "$REPO_ROOT"
+
+# .env 없으면 example 복사 + 안내 후 종료
+if [[ ! -f .env ]]; then
+  cp .env.example .env
+  echo ".env 가 없어서 .env.example 복사함. 값 채운 뒤 다시 실행하세요:"
+  echo "  vi .env && ./run.sh ${1:-all}"
+  exit 1
+fi
+
+# shellcheck disable=SC1091
+source ./.env
+source ./scripts/lib/common.sh
+init_logging
+
+# 비밀번호 비어있으면 프롬프트
+if [[ -z "${ADMIN_PASSWORD:-}" ]]; then
+  read -rsp "ADB ADMIN_PASSWORD: " ADMIN_PASSWORD; echo
+  export ADMIN_PASSWORD
+fi
+if [[ -z "${ORDS_PUBLIC_USER_PASSWORD:-}" ]]; then
+  read -rsp "ORDS_PUBLIC_USER_PASSWORD: " ORDS_PUBLIC_USER_PASSWORD; echo
+  export ORDS_PUBLIC_USER_PASSWORD
+fi
+
+cmd="${1:-all}"; shift || true
+
+case "$cmd" in
+  prereq)    bash scripts/00_prereq.sh ;;
+  install)   bash scripts/01_install.sh ;;
+  configure) bash scripts/02_configure.sh ;;
+  start)     bash scripts/03_start.sh ;;
+  smoke)     bash scripts/04_smoke.sh ;;
+  ha)        bash scripts/05_ha.sh ;;
+  ha-tf)     bash scripts/06_lb_terraform.sh "${1:-apply}" ;;
+  fetch-cert) bash scripts/07_fetch_oci_cert.sh ;;
+  teardown)  bash scripts/99_teardown.sh ;;
+  all)
+    bash scripts/00_prereq.sh
+    bash scripts/01_install.sh
+    bash scripts/02_configure.sh
+    bash scripts/03_start.sh
+    bash scripts/04_smoke.sh
+    ok "전체 설치 완료"
+    ;;
+  *)
+    err "unknown command: $cmd"
+    sed -n '5,12p' "$0" >&2
+    exit 1
+    ;;
+esac

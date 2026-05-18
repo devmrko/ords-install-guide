@@ -1,0 +1,16 @@
+[Unit]
+Description=Oracle REST Data Services (ORDS)
+After=network.target
+
+[Service]
+Type=simple
+User=${ORDS_USER}
+Environment=JAVA_HOME=${JAVA_HOME}
+Environment=PATH=${JAVA_HOME}/bin:/usr/bin:/bin
+ExecStart=${ORDS_HOME}/bin/ords --config ${ORDS_CONFIG} serve --port ${ORDS_PORT}
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
