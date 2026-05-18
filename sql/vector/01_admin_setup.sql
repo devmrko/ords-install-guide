@@ -43,13 +43,13 @@ prompt -- 3) ORDS 스키마 활성화 (BASE_PATH = vector)
 declare
   l_enabled boolean := false;
 begin
-  -- 이미 활성화된 경우 url_mapping_pattern 으로 식별
+  -- 이미 활성화된 경우 pattern 으로 식별 (DBA_ORDS_SCHEMAS.PATTERN)
   for r in (
-    select url_mapping_pattern
+    select pattern
       from dba_ords_schemas
      where parsing_schema = upper('&VECTOR_DEMO_USER')
   ) loop
-    dbms_output.put_line('ORDS already enabled for &VECTOR_DEMO_USER (pattern=' || r.url_mapping_pattern || ')');
+    dbms_output.put_line('ORDS already enabled for &VECTOR_DEMO_USER (pattern=' || r.pattern || ')');
     l_enabled := true;
   end loop;
 
@@ -68,11 +68,11 @@ end;
 /
 
 prompt -- 결과
-column username           format a25
-column account_status     format a18
-column url_mapping_pattern format a20
+column username       format a25
+column account_status format a18
+column pattern        format a20
 select username, account_status from dba_users where username = upper('&VECTOR_DEMO_USER');
-select parsing_schema, url_mapping_pattern
+select parsing_schema, pattern
   from dba_ords_schemas where parsing_schema = upper('&VECTOR_DEMO_USER');
 
 prompt -- 01_admin_setup done
