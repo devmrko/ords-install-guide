@@ -41,8 +41,10 @@ if as_root test -f "$ORDS_CONFIG/databases/$POOL_NAME/pool.xml"; then
 fi
 
 log "ords install adb 실행 (silent)"
+# ORDS 가 JAVA_HOME 을 확인하므로 sudo -E 와 함께 명시 export
 # 비밀번호는 3개 순서: admin → db_user → gateway_user
-as_root -E "$ORDS_HOME/bin/ords" \
+as_root env JAVA_HOME="$JAVA_HOME" PATH="$JAVA_HOME/bin:/usr/bin:/bin" \
+  "$ORDS_HOME/bin/ords" \
   --config "$ORDS_CONFIG" \
   install adb \
   --admin-user "$ADMIN_USER" \
@@ -54,13 +56,20 @@ as_root -E "$ORDS_HOME/bin/ords" \
   --feature-sdw true \
   --feature-db-api true \
   --feature-rest-enabled-sql true \
-  --jdbc-init-limit "${JDBC_INITIAL_LIMIT:-5}" \
-  --jdbc-max-limit  "${JDBC_MAX_LIMIT:-25}" \
   --log-folder "$ORDS_CONFIG/logs" \
   --password-stdin <<EOF
 $ADMIN_PASSWORD
 $ORDS_DB_USER_PASSWORD
 $ORDS_GATEWAY_USER_PASSWORD
 EOF
+
+# jdbc pool size 는 install 후 config set 으로 적용
+log "pool 사이즈 설정: initial=${JDBC_INITIAL_LIMIT:-5}, max=${JDBC_MAX_LIMIT:-25}"
+as_root env JAVA_HOME="$JAVA_HOME" PATH="$JAVA_HOME/bin:/usr/bin:/bin" \
+  "$ORDS_HOME/bin/ords" --config "$ORDS_CONFIG" \
+  config --db-pool "$POOL_NAME" set jdbc.InitialLimit "${JDBC_INITIAL_LIMIT:-5}"
+as_root env JAVA_HOME="$JAVA_HOME" PATH="$JAVA_HOME/bin:/usr/bin:/bin" \
+  "$ORDS_HOME/bin/ords" --config "$ORDS_CONFIG" \
+  config --db-pool "$POOL_NAME" set jdbc.MaxLimit "${JDBC_MAX_LIMIT:-25}"
 
 ok "configure 완료 — config: $ORDS_CONFIG"
