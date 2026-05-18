@@ -1,9 +1,37 @@
 variable "compartment_ocid" { type = string }
-variable "subnet_ocid"      { type = string }
 variable "region" {
   description = "OCI region (예: ap-seoul-1). 빈 값이면 ~/.oci/config DEFAULT 프로파일 region 사용"
   type        = string
   default     = ""
+}
+
+# --- Network (선택 — create_network=true 면 VCN 까지 새로 만듦) ---
+variable "create_network" {
+  description = "true 면 network.tf 가 VCN+IG+RT+SL+Subnet 새로 생성. false 면 var.subnet_ocid 필수."
+  type        = bool
+  default     = false
+}
+variable "subnet_ocid" {
+  description = "create_network=false 일 때 LB 가 들어갈 기존 subnet OCID"
+  type        = string
+  default     = ""
+}
+variable "network_name_prefix" {
+  type    = string
+  default = "ords"
+}
+variable "vcn_cidr" {
+  type    = string
+  default = "10.99.0.0/16"
+}
+variable "public_subnet_cidr" {
+  type    = string
+  default = "10.99.1.0/24"
+}
+variable "ssh_ingress_cidr" {
+  description = "SSH(22) 허용 source CIDR. PoC: 0.0.0.0/0. 운영은 회사망/Bastion IP 로 좁힐 것."
+  type        = string
+  default     = "0.0.0.0/0"
 }
 
 variable "ords_nodes" {

@@ -49,8 +49,9 @@ EOF
   ok "PATH 등록: $PROFILE (재로그인 후 적용)"
 fi
 
-# --- firewalld: ORDS 포트 개방 (RHEL/OL 기본 켜져있음) ---
+# --- 호스트 방화벽: ORDS 포트 개방 ---
 # 안 열어주면 LB healthcheck 가 CONNECT_FAILED (E2E 시 실수 다발 지점)
+# RHEL/OL → firewalld, Ubuntu/Debian → ufw 자동 분기.
 if command -v firewall-cmd >/dev/null 2>&1 && as_root firewall-cmd --state >/dev/null 2>&1; then
   if as_root firewall-cmd --list-ports | tr ' ' '\n' | grep -qx "${ORDS_PORT}/tcp"; then
     ok "firewalld: ${ORDS_PORT}/tcp 이미 개방"
@@ -60,8 +61,16 @@ if command -v firewall-cmd >/dev/null 2>&1 && as_root firewall-cmd --state >/dev
     as_root firewall-cmd --reload >/dev/null
     ok "firewalld 갱신 완료"
   fi
+elif command -v ufw >/dev/null 2>&1 && as_root ufw status 2>/dev/null | grep -q "Status: active"; then
+  if as_root ufw status | grep -qE "^${ORDS_PORT}/tcp\s+ALLOW"; then
+    ok "ufw: ${ORDS_PORT}/tcp 이미 개방"
+  else
+    log "ufw: ${ORDS_PORT}/tcp 개방"
+    as_root ufw allow "${ORDS_PORT}/tcp" >/dev/null
+    ok "ufw 갱신 완료"
+  fi
 else
-  log "firewalld 미사용 — skip (Ubuntu/Debian 등은 ufw 등 별도 확인)"
+  log "host firewall(firewalld/ufw) 비활성 — skip (다른 방화벽 사용 중이면 ${ORDS_PORT}/tcp 직접 개방 필요)"
 fi
 
 ok "prereq 완료"

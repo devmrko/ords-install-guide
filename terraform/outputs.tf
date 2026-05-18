@@ -15,3 +15,13 @@ output "cert_ref" {
 output "healthcheck_url_sample" {
   value = "https://<LB_IP>${var.healthcheck_path}"
 }
+
+# create_network=true 일 때만 채워짐. 사용자가 ORDS VM 띄울 때 이 OCID 들 참조.
+output "vcn_ocid" {
+  value       = var.create_network ? oci_core_vcn.ords[0].id : null
+  description = "신규 생성된 VCN OCID (create_network=true 일 때만)"
+}
+output "subnet_ocid" {
+  value       = local.effective_subnet_ocid
+  description = "LB 가 쓰는 subnet OCID (신규 또는 var.subnet_ocid)"
+}

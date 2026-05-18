@@ -13,13 +13,24 @@ source "$REPO_ROOT/scripts/lib/common.sh"
 
 need_cmd terraform
 
-require_env OCI_COMPARTMENT_OCID OCI_LB_SUBNET_OCID \
+require_env OCI_COMPARTMENT_OCID \
             HA_NODES ORDS_PORT LB_HEALTHCHECK_PATH \
             LB_SHAPE LB_BANDWIDTH_MIN LB_BANDWIDTH_MAX LB_IS_PRIVATE
 
+# network: 신규 생성 모드면 VCN/Subnet 도 terraform 이 만듦. 아니면 기존 subnet OCID 필수.
+if [[ "${OCI_CREATE_NETWORK:-false}" == "true" ]]; then
+  export TF_VAR_create_network=true
+  export TF_VAR_vcn_cidr="${OCI_VCN_CIDR:-10.99.0.0/16}"
+  export TF_VAR_public_subnet_cidr="${OCI_PUBLIC_SUBNET_CIDR:-10.99.1.0/24}"
+  export TF_VAR_ssh_ingress_cidr="${OCI_SSH_INGRESS_CIDR:-0.0.0.0/0}"
+else
+  require_env OCI_LB_SUBNET_OCID
+  export TF_VAR_create_network=false
+  export TF_VAR_subnet_ocid="$OCI_LB_SUBNET_OCID"
+fi
+
 # 일반 (sensitive 아닌) 변수는 환경변수로 OK
 export TF_VAR_compartment_ocid="$OCI_COMPARTMENT_OCID"
-export TF_VAR_subnet_ocid="$OCI_LB_SUBNET_OCID"
 # region 은 ~/.oci/config 의 DEFAULT 와 다를 수 있음 (예: DEFAULT=us-ashburn, 실제 배포=ap-seoul)
 # 비워두면 provider 가 config 파일에서 읽음
 export TF_VAR_region="${OCI_REGION:-}"

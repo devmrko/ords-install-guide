@@ -63,7 +63,7 @@ resource "oci_load_balancer_load_balancer" "ords" {
   compartment_id = var.compartment_ocid
   display_name   = "ords-lb"
   shape          = var.lb_shape
-  subnet_ids     = [var.subnet_ocid]
+  subnet_ids     = [local.effective_subnet_ocid]
   is_private     = var.lb_is_private
 
   dynamic "shape_details" {
