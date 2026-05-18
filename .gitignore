@@ -35,3 +35,5 @@ terraform/crash.log
 # OS
 .DS_Store
 Thumbs.db
+.e2e-resources.env
+.e2e-certs/
