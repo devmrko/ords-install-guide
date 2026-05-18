@@ -20,6 +20,9 @@ require_env OCI_COMPARTMENT_OCID OCI_LB_SUBNET_OCID \
 # 일반 (sensitive 아닌) 변수는 환경변수로 OK
 export TF_VAR_compartment_ocid="$OCI_COMPARTMENT_OCID"
 export TF_VAR_subnet_ocid="$OCI_LB_SUBNET_OCID"
+# region 은 ~/.oci/config 의 DEFAULT 와 다를 수 있음 (예: DEFAULT=us-ashburn, 실제 배포=ap-seoul)
+# 비워두면 provider 가 config 파일에서 읽음
+export TF_VAR_region="${OCI_REGION:-}"
 export TF_VAR_ords_nodes="$HA_NODES"
 export TF_VAR_ords_port="$ORDS_PORT"
 export TF_VAR_healthcheck_path="$LB_HEALTHCHECK_PATH"

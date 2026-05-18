@@ -1,5 +1,10 @@
 variable "compartment_ocid" { type = string }
 variable "subnet_ocid"      { type = string }
+variable "region" {
+  description = "OCI region (예: ap-seoul-1). 빈 값이면 ~/.oci/config DEFAULT 프로파일 region 사용"
+  type        = string
+  default     = ""
+}
 
 variable "ords_nodes" {
   description = "공백 구분된 ORDS 노드 IP 리스트 (예: '10.0.1.11 10.0.1.12')"
@@ -12,6 +17,11 @@ variable "ords_port" {
 variable "healthcheck_path" {
   type    = string
   default = "/ords/_/landing"
+}
+variable "healthcheck_return_code" {
+  description = "기대하는 HTTP 응답 코드. ORDS landing 은 인증 redirect 라 302."
+  type        = number
+  default     = 302
 }
 
 variable "lb_shape" {

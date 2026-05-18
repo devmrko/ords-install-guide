@@ -1,9 +1,15 @@
 # ============================================================
 # main.tf
-# - 사설 인증서를 OCI Certificate Service 에 import (선택)
 # - OCI Load Balancer (Flexible) 생성
+# - 사설 인증서를 LB 에 직접 attach (oci_load_balancer_certificate, import_cert=true)
+#   또는 기존 OCI Certificate Service OCID 참조 (import_cert=false, cert_ocid)
 # - HTTPS(443) listener → backend set → ORDS 노드들로 라우팅
-# - HTTP(80) listener → 자동으로 HTTPS 리다이렉트
+# - HTTP(80) listener → HTTPS(443) 301 리다이렉트
+#
+# 주의 (provider v8.x 기준):
+#   oci_certificates_management_certificate 리소스는 IMPORTED PEM 입력 미지원
+#   (CSR/Internal CA 발급만 가능). PEM 직접 attach 가 필요한 케이스는
+#   oci_load_balancer_certificate 가 정답. LB 종단이라 이걸로 충분.
 # ============================================================
 terraform {
   required_version = ">= 1.3"
@@ -22,35 +28,31 @@ terraform {
   # ============================================================
 }
 
-# Provider 는 환경의 ~/.oci/config 자동 인식 (oci setup config 먼저)
-provider "oci" {}
+# Provider 는 환경의 ~/.oci/config 자동 인식 (oci setup config 먼저).
+# var.region 채우면 config DEFAULT 와 다른 region 강제 가능 (예: DEFAULT=us-ashburn 인데 ap-seoul 에 배포).
+provider "oci" {
+  region = var.region != "" ? var.region : null
+}
 
 locals {
   ords_node_ips = split(" ", trimspace(var.ords_nodes))
-  # import_cert=true 면 새 리소스의 id, false 면 미리 받은 cert_ocid
-  effective_cert_ocid = var.import_cert ? oci_certificates_management_certificate.private[0].id : var.cert_ocid
 }
 
 # ------------------------------------------------------------
-# 사설 인증서 import (선택)
+# 사설 인증서 import — LB 에 직접 attach
+# (provider v8 의 oci_certificates_management_certificate 는 IMPORTED PEM 미지원,
+#  대신 LB 자체 cert 리소스가 PEM 직접 받음.)
 # ------------------------------------------------------------
-resource "oci_certificates_management_certificate" "private" {
-  count          = var.import_cert ? 1 : 0
-  compartment_id = var.compartment_ocid
-  name           = var.cert_name
-  description    = "ORDS LB private TLS cert (imported via Terraform)"
+resource "oci_load_balancer_certificate" "private" {
+  count             = var.import_cert ? 1 : 0
+  load_balancer_id  = oci_load_balancer_load_balancer.ords.id
+  certificate_name  = var.cert_name
+  public_certificate = var.cert_pem
+  private_key        = var.key_pem
+  ca_certificate     = var.chain_pem != "" ? var.chain_pem : null
 
-  certificate_config {
-    config_type        = "IMPORTED"
-    cert_chain_pem     = var.chain_pem != "" ? var.chain_pem : null
-    certificate_pem    = var.cert_pem
-    private_key_pem    = var.key_pem
-  }
-
-  # 다른 서비스가 이 cert 를 참조 중이면 destroy 로 의도치 않게 사라지지 않게 보호.
-  # 정말 지우려면 이 lifecycle 블록 제거 후 destroy 또는 `terraform state rm`.
   lifecycle {
-    prevent_destroy = true
+    create_before_destroy = true
   }
 }
 
@@ -85,7 +87,8 @@ resource "oci_load_balancer_backend_set" "ords" {
     protocol            = "HTTP"
     port                = var.ords_port
     url_path            = var.healthcheck_path
-    return_code         = 200
+    # ORDS /ords/_/landing 은 인증 필요 → 302 로 응답. 그것 자체로 "ORDS 살아있다"는 신호.
+    return_code         = var.healthcheck_return_code
     retries             = 3
     timeout_in_millis   = 3000
     interval_ms         = 10000
@@ -111,8 +114,12 @@ resource "oci_load_balancer_listener" "https" {
   port                     = 443
   protocol                 = "HTTP"
 
+  # 두 가지 cert 출처 지원:
+  #  - import_cert=true  → 위 oci_load_balancer_certificate 로 LB 에 직접 attach (certificate_name)
+  #  - import_cert=false → 기존 OCI Certificate Service 에 등록된 cert 의 OCID 사용 (certificate_ids)
   ssl_configuration {
-    certificate_ids         = [local.effective_cert_ocid]
+    certificate_name        = var.import_cert ? oci_load_balancer_certificate.private[0].certificate_name : null
+    certificate_ids         = var.import_cert ? null : [var.cert_ocid]
     verify_peer_certificate = false
   }
 }
@@ -122,7 +129,7 @@ resource "oci_load_balancer_listener" "https" {
 # ------------------------------------------------------------
 resource "oci_load_balancer_rule_set" "redirect_to_https" {
   load_balancer_id = oci_load_balancer_load_balancer.ords.id
-  name             = "redirect-http-to-https"
+  name             = "redirect_http_to_https"
 
   items {
     action = "REDIRECT"

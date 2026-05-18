@@ -11,7 +11,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$REPO_ROOT/.env"
 source "$REPO_ROOT/scripts/lib/common.sh"
 
-require_env ORDS_USER ORDS_GROUP JAVA_HOME JDK_URL DOWNLOAD_DIR
+require_env ORDS_USER ORDS_GROUP JAVA_HOME JDK_URL DOWNLOAD_DIR ORDS_PORT
 
 log "0/4 명령 확인"
 # zip 은 wallet.zip 자동생성에, envsubst(gettext)는 systemd unit 렌더에 필요
@@ -47,6 +47,21 @@ export JAVA_HOME=$JAVA_HOME
 export PATH=\$JAVA_HOME/bin:\$PATH
 EOF
   ok "PATH 등록: $PROFILE (재로그인 후 적용)"
+fi
+
+# --- firewalld: ORDS 포트 개방 (RHEL/OL 기본 켜져있음) ---
+# 안 열어주면 LB healthcheck 가 CONNECT_FAILED (E2E 시 실수 다발 지점)
+if command -v firewall-cmd >/dev/null 2>&1 && as_root firewall-cmd --state >/dev/null 2>&1; then
+  if as_root firewall-cmd --list-ports | tr ' ' '\n' | grep -qx "${ORDS_PORT}/tcp"; then
+    ok "firewalld: ${ORDS_PORT}/tcp 이미 개방"
+  else
+    log "firewalld: ${ORDS_PORT}/tcp 개방"
+    as_root firewall-cmd --add-port="${ORDS_PORT}/tcp" --permanent >/dev/null
+    as_root firewall-cmd --reload >/dev/null
+    ok "firewalld 갱신 완료"
+  fi
+else
+  log "firewalld 미사용 — skip (Ubuntu/Debian 등은 ufw 등 별도 확인)"
 fi
 
 ok "prereq 완료"

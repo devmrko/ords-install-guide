@@ -7,9 +7,9 @@ output "lb_ocid" {
   value = oci_load_balancer_load_balancer.ords.id
 }
 
-output "cert_ocid" {
-  value       = local.effective_cert_ocid
-  description = "LB가 사용 중인 인증서 OCID (신규 import 또는 기존)"
+output "cert_ref" {
+  value = var.import_cert ? oci_load_balancer_certificate.private[0].certificate_name : var.cert_ocid
+  description = "LB listener 가 참조 중인 cert (import_cert=true 면 LB-attached name, false 면 Cert Service OCID)"
 }
 
 output "healthcheck_url_sample" {
