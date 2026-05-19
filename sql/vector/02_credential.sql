@@ -49,7 +49,9 @@ begin
 end;
 /
 
-prompt -- 2) credential 생성
+prompt -- 2) credential 생성  (보안: echo/termout off — private_key 가 로그에 안 박히게)
+set echo off
+set termout off
 begin
   dbms_vector_chain.create_credential(
     credential_name => '&OCI_GENAI_CRED_NAME',
@@ -64,6 +66,10 @@ begin
   dbms_output.put_line('credential &OCI_GENAI_CRED_NAME created in schema &VECTOR_DEMO_USER');
 end;
 /
+
+set termout on
+set echo on
+prompt -- (create_credential 완료 — 본문은 보안상 로그 미출력)
 
 prompt -- 3) 결과 확인
 column credential_name format a25

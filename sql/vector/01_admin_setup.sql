@@ -39,6 +39,7 @@ grant create session, create table, create procedure, create view to &VECTOR_DEM
 grant execute on dbms_cloud to &VECTOR_DEMO_USER;
 grant execute on dbms_vector to &VECTOR_DEMO_USER;
 grant execute on dbms_vector_chain to &VECTOR_DEMO_USER;
+grant execute on dbms_cloud_ai to &VECTOR_DEMO_USER;     -- DBMS_VECTOR_CHAIN.CREATE_CREDENTIAL 가 내부적으로 호출
 
 prompt -- 2b) OCI Generative AI 엔드포인트로 outbound HTTP ACL 부여
 -- DBMS_VECTOR.UTL_TO_EMBEDDING 가 ocigenai provider 호출 시 필요.
