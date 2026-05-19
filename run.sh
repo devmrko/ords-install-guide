@@ -7,7 +7,7 @@
 #   ./run.sh ha | ha-tf {plan|apply|destroy|output}
 #   ./run.sh fetch-cert     # OCI Cert Service → OS 로 cert PEM 내려받아 등록
 #   ./run.sh vector-demo {all|admin|credential|schema|publish|test|onnx|cleanup}
-#                           # ADB 위에 OCI GenAI Cohere v3/v4 임베딩 + ORDS vector 검색 모듈 발행
+#                           # ADB 위에 OCI GenAI Cohere v4 임베딩 + ORDS vector 검색 모듈 발행
 #   ./run.sh all       (= prereq install configure start smoke)
 #   ./run.sh teardown
 # ============================================================
