@@ -233,6 +233,7 @@ ords-install-guide/
 │   ├── smoke_test.sql              # 04_smoke.sh가 sqlcl로 던질 SQL — SELECT 1 from dual, ORDS 메타 확인 등
 │   └── vector/                     # 07-vector-rest.md 데모용 SQL 묶음
 │       ├── 01_admin_setup.sql      # ADMIN: VECTOR_DEMO 사용자 + GenAI host ACL + ORDS schema enable (base=/ords/vector/)
+│       ├── 02_credential.sql       # VECTOR_DEMO: DBMS_VECTOR_CHAIN.CREATE_CREDENTIAL 로 OCI native auth credential 등록
 │       ├── 03_schema.sql           # VECTOR_DEMO: DOC_CHUNKS (embedding_v3 VECTOR(1024), embedding_v4 VECTOR(*))
 │       ├── 04_seed.sql             # 12건 샘플 INSERT + DBMS_VECTOR.UTL_TO_EMBEDDING 으로 v3/v4 두 모델 자동 채움 + 벡터 인덱스
 │       ├── 05_ords_publish.sql     # module vector.search + POST/GET handler (by=v3|v4 디스패치)
@@ -266,9 +267,9 @@ ords-install-guide/
 ./run.sh ha          # HA secondary 노드 부트스트랩 안내 + 검증
 ./run.sh ha-tf       {plan|apply|destroy|output}   # OCI LB + cert (Terraform)
 ./run.sh fetch-cert  # OCI Cert Service 의 cert 를 OS 로 내려받아 truststore 등록
-./run.sh vector-demo {all|admin|schema|publish|test|onnx|cleanup}
+./run.sh vector-demo {all|admin|credential|schema|publish|test|onnx|cleanup}
                      # ADB 23ai + ORDS 위에 OCI GenAI Cohere v3/v4 임베딩 + vector 검색 REST 모듈 발행
-                     # (onnx 는 선택 — optional_load_onnx.sql 로 in-DB ONNX 모델 등록할 때만)
+                     # (credential 단계는 DBMS_VECTOR_CHAIN.CREATE_CREDENTIAL 로 OCI API key 등록)
 ./run.sh all         # prereq~smoke 순차
 ./run.sh teardown    # 역순 정리
 ```

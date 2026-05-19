@@ -22,12 +22,14 @@
 - ADB 가 **Oracle Database 23ai** 기반이어야 함 (`VECTOR` 타입 /
   `DBMS_VECTOR.UTL_TO_EMBEDDING` 등 23ai 이상 기능 사용)
 - ADB 에서 OCI Generative AI 엔드포인트로 outbound HTTPS 가능
-- 다음 중 하나의 GenAI 인증 자격 보유:
-  - **Resource Principal** (`OCI$RESOURCE_PRINCIPAL`) — ADB 가 동일 tenancy 의
-    GenAI 서비스 호출 권한을 IAM 정책으로 받은 상태
-  - ADMIN 이 만든 **NATIVE OCI credential**
-    (`DBMS_CLOUD.CREATE_CREDENTIAL` with `user_ocid` / `tenancy_ocid` /
-    `private_key` / `fingerprint`)
+- OCI API key (콘솔 > User Settings > API Keys) 생성 + fingerprint 확보.
+  이 데모는 **`DBMS_VECTOR_CHAIN.CREATE_CREDENTIAL`** 로 credential 을
+  VECTOR_DEMO 스키마에 직접 생성한다. (참고: ADB 의 Resource Principal
+  (`OCI$RESOURCE_PRINCIPAL`) 은 `DBMS_CLOUD` 계열에서만 동작하고,
+  `DBMS_VECTOR.UTL_TO_EMBEDDING` 의 `ocigenai` provider 에는 쓰이지 않음.
+  벡터 임베딩 호출은 반드시 `DBMS_VECTOR_CHAIN.CREATE_CREDENTIAL` 로 발급해야 함.)
+- OCI IAM 정책: 위 user 가 GenAI inference 호출 권한을 가진 group 에 속해야 함
+  (예: `allow group genai-callers to use generative-ai-family in compartment X`)
 
 ## 7.2 `.env` 설정
 
@@ -35,10 +37,17 @@
 VECTOR_DEMO_USER=VECTOR_DEMO
 VECTOR_DEMO_PASSWORD=                       # ADB 정책: 12~30자, 대/소/숫자/특수
 
-OCI_GENAI_CREDENTIAL=OCI$RESOURCE_PRINCIPAL
+OCI_GENAI_CRED_NAME=OCI_GENAI_CRED
 OCI_GENAI_ENDPOINT=https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/20231130/actions/embedText
 OCI_GENAI_MODEL_V3=cohere.embed-multilingual-v3.0
 OCI_GENAI_MODEL_V4=cohere.embed-v4.0
+
+# OCI native API key — ~/.oci/config 의 DEFAULT 와 동일
+OCI_USER_OCID=ocid1.user.oc1..
+OCI_TENANCY_OCID=ocid1.tenancy.oc1..
+OCI_COMPARTMENT_OCID=ocid1.compartment.oc1..
+OCI_KEY_FINGERPRINT=aa:bb:cc:...
+OCI_API_KEY_PEM=/home/opc/.oci/oci_api_key.pem
 ```
 
 다른 region 의 GenAI 를 사용하려면 `OCI_GENAI_ENDPOINT` 의 호스트만 교체하면
@@ -58,8 +67,9 @@ OCI_GENAI_MODEL_V4=cohere.embed-v4.0
 
 | 명령 | 동작 |
 |---|---|
-| `./run.sh vector-demo admin`   | 사용자 + ACL + ORDS schema enable 만 |
-| `./run.sh vector-demo schema`  | 테이블/seed/ORDS 발행/SQL 검증 |
+| `./run.sh vector-demo admin`      | 사용자 + ACL + ORDS schema enable 만 |
+| `./run.sh vector-demo credential` | 02_credential.sql 만 (PEM 갱신/key rotation 시) |
+| `./run.sh vector-demo schema`     | 테이블/seed/ORDS 발행/SQL 검증 |
 | `./run.sh vector-demo publish` | ORDS 모듈만 재발행 (handler PL/SQL 수정 후) |
 | `./run.sh vector-demo test`    | SQL 레벨 검증만 |
 | `./run.sh vector-demo onnx`    | (선택) `optional_load_onnx.sql` 로 ONNX 모델 로드 |
@@ -202,9 +212,12 @@ ONNX 경로를 **선택 사항** 으로 남겨둡니다 (`sql/vector/optional_lo
 - `VECTOR_DISTANCE(..., cosine)` 는 정확검색이므로 데이터 규모 증가 시
   `04_seed.sql` 이 생성하는 NEIGHBOR PARTITIONS 인덱스 + `fetch approx first k`
   사용으로 전환 (handler 의 `order by ... fetch first` 절 수정)
-- credential `OCI$RESOURCE_PRINCIPAL` 사용 시 ADB 의 Resource Principal 이
-  필요한 IAM 정책 (`allow any-user to {GENERATIVE_AI_INFERENCE} in tenancy
-  where ALL {request.principal.type = 'autonomousdatabase', ...}`) 이 있어야 함
+- credential 은 `DBMS_VECTOR_CHAIN.CREATE_CREDENTIAL` 로 VECTOR_DEMO 스키마에
+  생성되며 PEM private key 가 DB 안에 저장됨. 절대 export 되지 않도록 운영 시
+  `USER_CREDENTIALS` 뷰 접근 권한 관리 필요. 키 회전은
+  `./run.sh vector-demo credential` 로 재생성 (drop + create)
+- 임베딩 호출 권한은 IAM 의 user/group 정책에 의존
+  (예: `allow group genai-callers to use generative-ai-family in compartment X`)
 - ACL: `01_admin_setup.sql` 은 `OCI_GENAI_ENDPOINT` 의 호스트만 부여. region 을
   바꿨다면 다시 실행되어야 함 (멱등하게 append 됨)
 

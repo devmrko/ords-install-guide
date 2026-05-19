@@ -9,7 +9,7 @@
 -- 멱등성: title 기준으로 중복 행 INSERT skip.
 --         기존 행도 embedding_v3/v4 가 NULL 이면 UPDATE 로 채움.
 --
--- DEFINE: &OCI_GENAI_CREDENTIAL, &OCI_GENAI_ENDPOINT,
+-- DEFINE: &OCI_GENAI_CRED_NAME, &OCI_GENAI_ENDPOINT,
 --         &OCI_GENAI_MODEL_V3, &OCI_GENAI_MODEL_V4
 -- ============================================================
 set serveroutput on
@@ -25,7 +25,7 @@ return vector authid current_user is
 begin
   l_params := json('{
     "provider": "ocigenai",
-    "credential_name": "&OCI_GENAI_CREDENTIAL",
+    "credential_name": "&OCI_GENAI_CRED_NAME",
     "url": "&OCI_GENAI_ENDPOINT",
     "model": "&OCI_GENAI_MODEL_V3",
     "input_type": "' || p_input_type || '"
@@ -40,7 +40,7 @@ return vector authid current_user is
 begin
   l_params := json('{
     "provider": "ocigenai",
-    "credential_name": "&OCI_GENAI_CREDENTIAL",
+    "credential_name": "&OCI_GENAI_CRED_NAME",
     "url": "&OCI_GENAI_ENDPOINT",
     "model": "&OCI_GENAI_MODEL_V4",
     "input_type": "' || p_input_type || '"

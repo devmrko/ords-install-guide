@@ -5,7 +5,7 @@
 -- ORDS 거치지 않고 SQL 레벨에서 두 임베딩 컬럼 (v3 / v4) 이 정상 동작하는지 확인.
 -- (REST 호출은 docs/07-vector-rest.md 의 curl 예제 참고)
 --
--- DEFINE: &OCI_GENAI_CREDENTIAL, &OCI_GENAI_ENDPOINT,
+-- DEFINE: &OCI_GENAI_CRED_NAME, &OCI_GENAI_ENDPOINT,
 --         &OCI_GENAI_MODEL_V3, &OCI_GENAI_MODEL_V4
 -- ============================================================
 set serveroutput on
@@ -30,7 +30,7 @@ create or replace function q_emb_v3(p_text clob) return vector authid current_us
 begin
   l_params := json('{
     "provider": "ocigenai",
-    "credential_name": "&OCI_GENAI_CREDENTIAL",
+    "credential_name": "&OCI_GENAI_CRED_NAME",
     "url": "&OCI_GENAI_ENDPOINT",
     "model": "&OCI_GENAI_MODEL_V3",
     "input_type": "search_query"
@@ -44,7 +44,7 @@ create or replace function q_emb_v4(p_text clob) return vector authid current_us
 begin
   l_params := json('{
     "provider": "ocigenai",
-    "credential_name": "&OCI_GENAI_CREDENTIAL",
+    "credential_name": "&OCI_GENAI_CRED_NAME",
     "url": "&OCI_GENAI_ENDPOINT",
     "model": "&OCI_GENAI_MODEL_V4",
     "input_type": "search_query"

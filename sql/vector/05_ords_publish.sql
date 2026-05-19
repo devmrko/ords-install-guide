@@ -16,7 +16,7 @@
 --   GET   https://<host>/ords/vector/docs/list
 --
 -- 멱등성: 같은 module/template/handler 정의는 ORDS API 가 update 수행
--- DEFINE: &OCI_GENAI_CREDENTIAL, &OCI_GENAI_ENDPOINT,
+-- DEFINE: &OCI_GENAI_CRED_NAME, &OCI_GENAI_ENDPOINT,
 --         &OCI_GENAI_MODEL_V3, &OCI_GENAI_MODEL_V4
 --
 -- 주의:
@@ -100,7 +100,7 @@ begin
   if l_by = 'v3' then
     l_params := json('{
       "provider": "ocigenai",
-      "credential_name": "&OCI_GENAI_CREDENTIAL",
+      "credential_name": "&OCI_GENAI_CRED_NAME",
       "url": "&OCI_GENAI_ENDPOINT",
       "model": "&OCI_GENAI_MODEL_V3",
       "input_type": "search_query"
@@ -108,7 +108,7 @@ begin
   else
     l_params := json('{
       "provider": "ocigenai",
-      "credential_name": "&OCI_GENAI_CREDENTIAL",
+      "credential_name": "&OCI_GENAI_CRED_NAME",
       "url": "&OCI_GENAI_ENDPOINT",
       "model": "&OCI_GENAI_MODEL_V4",
       "input_type": "search_query"
